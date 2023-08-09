@@ -240,13 +240,14 @@ inline void ProcessRTFVehicle(CVehicle* vehicle)
     }
 
     // Make use of driving style "6" for cars and bicycles
-    if (vehicle->m_AutoPilot.DrivingMode <= 2 || vehicle->m_AutoPilot.DrivingMode == 4)
+    if (vehicle->m_AutoPilot.DrivingMode <= DRIVING_STYLE_AVOID_CARS ||
+        vehicle->m_AutoPilot.DrivingMode == DRIVING_STYLE_STOP_FOR_CARS_IGNORE_LIGHTS)
     {
         if (isBike)
         {
             if (subClass == VEHICLE_TYPE_BMX)
             {
-                if (UseBikeLogicOnBicycles) vehicle->m_AutoPilot.DrivingMode = 6;
+                if (UseBikeLogicOnBicycles) vehicle->m_AutoPilot.DrivingMode = DRIVING_STYLE_AVOID_CARS_STOP_FOR_PEDS_OBEY_LIGHTS;
                 if (BicyclesDontStopForRed) vehicle->m_AutoPilot.DrivingMode = DRIVING_STYLE_PLOUGH_THROUGH;
             }
         }
@@ -255,7 +256,7 @@ inline void ProcessRTFVehicle(CVehicle* vehicle)
             if (UseBikeLogicOnCars)
             {
                 if (HasCarStoppedBecauseOfLight(vehicle)) vehicle->m_AutoPilot.DrivingMode = DRIVING_STYLE_STOP_FOR_CARS;
-                else vehicle->m_AutoPilot.DrivingMode = 6;
+                else vehicle->m_AutoPilot.DrivingMode = DRIVING_STYLE_AVOID_CARS_STOP_FOR_PEDS_OBEY_LIGHTS;
             }
         }
     }
@@ -484,11 +485,15 @@ __attribute__((optnone)) __attribute__((naked)) void SetNewCarLane(void)
 #else
 __attribute__((optnone)) __attribute__((naked)) void VehicleChangesLane(void)
 {
-    asm volatile("BL VehicleChangesLane_Patch\nMOV W8, W0");
+    asm volatile("MOV X0, X19\nBL VehicleChangesLane_Patch");
+    asm volatile("MOV X16, %0\n" :: "r"(VehicleChangesLane_BackTo));
+    asm("MOV W8, W0\nBR X16");
 }
 __attribute__((optnone)) __attribute__((naked)) void SetNewCarLane(void)
 {
-    asm volatile("BL SetNewCarLane_Patch");
+    asm volatile("MOV X0, X11\nMOV W1, W22\nBL SetNewCarLane_Patch");
+    asm volatile("MOV X16, %0\n" :: "r"(SetNewCarLane_BackTo));
+    asm("BR X16");
 }
 #endif
 
@@ -542,7 +547,8 @@ extern "C" void OnModLoad()
 
     HOOK(AutomobileHorn, aml->GetSym(hGTASA, "_ZN11CAutomobile11PlayCarHornEv"));
     HOOK(BikeHorn, aml->GetSym(hGTASA, "_ZN5CBike11PlayCarHornEv"));
-    HOOK(VehicleRender, aml->GetSym(hGTASA, "_ZN8CVehicle6RenderEv"));
+    HOOKPLT(VehicleRender, pGTASA + BYVER(0x66E26C, 0x83D318)); // vtable
+    HOOKPLT(VehicleRender, pGTASA + BYVER(0x66F3B4, 0x83F048));
     HOOK(VehicleDestroy, aml->GetSym(hGTASA, "_ZN8CVehicleD2Ev"));
 
     // CCarCtrl::PickNextNodeRandomly
