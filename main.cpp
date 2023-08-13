@@ -13,7 +13,7 @@
 
 #include "rtf_data.h"
 
-MYMODCFG(net.juniordjjr.rusjj.rtf, RealTrafficFix, 1.0, JuniorDjjr & RusJJ)
+MYMODCFG(net.juniordjjr.rusjj.rtf, RealTrafficFix, 1.1, JuniorDjjr & RusJJ)
 BEGIN_DEPLIST()
     ADD_DEPENDENCY_VER(net.rusjj.aml, 1.0.2.1)
 END_DEPLIST()
@@ -422,25 +422,25 @@ extern "C" int VehicleChangesLane_Patch(CVehicle* vehicle)
     if(player && (playerVehicle = player->m_pVehicle))
     {
         float playerSpeed = playerVehicle->m_vecMoveSpeed.Magnitude() * 50.0f * 3.6f;
-        if (!(playerSpeed > 80.0f || (vehicle->GetPosition() - playerVehicle->GetPosition()).Magnitude() <= 20.0f))
+        if (playerSpeed > 80.0f || (vehicle->GetPosition() - playerVehicle->GetPosition()).Magnitude() <= 20.0f)
         {
-            auto curLine = vehicle->m_AutoPilot.NewLane;
-            if(rand() % 1) --vehicle->m_AutoPilot.NewLane;
-            else ++vehicle->m_AutoPilot.NewLane;
+            return vehicle->m_AutoPilot.NewLane;
         }
     }
+    
+    auto curLine = vehicle->m_AutoPilot.NewLane;
+    if(rand() % 1) --vehicle->m_AutoPilot.NewLane;
+    else ++vehicle->m_AutoPilot.NewLane;
+
     return vehicle->m_AutoPilot.NewLane;
 }
 extern "C" void SetNewCarLane_Patch(CVehicle* vehicle, int magicValue)
 {
-    if((vehicle->vehicleFlags.bIsBig || vehicle->vehicleFlags.bIsBus || vehicle->m_pHandling->Transmission.m_fMaxVelocity) &&
+    if((vehicle->vehicleFlags.bIsBig || vehicle->vehicleFlags.bIsBus || vehicle->m_pHandling->Transmission.m_fMaxVelocity < 0.62f) &&
        (!vehicle->vehicleFlags.bIsLawEnforcer && !vehicle->vehicleFlags.bIsAmbulanceOnDuty && !vehicle->vehicleFlags.bIsFireTruckOnDuty))
     {
-        if(magicValue > 1)
-        {
-            vehicle->m_AutoPilot.OldLane = 1;
-            vehicle->m_AutoPilot.NewLane = 1;
-        }
+        vehicle->m_AutoPilot.OldLane = 1;
+        vehicle->m_AutoPilot.NewLane = 1;
         vehicle->m_AutoPilot.bAlwaysInSlowLane = true;
     }
     else
