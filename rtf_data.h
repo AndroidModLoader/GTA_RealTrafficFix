@@ -7,9 +7,9 @@ public:
     float freeLineTimer;
     struct
     {
-        bool bPhysics : 1;
-        bool bRunGroundStuckFix : 1;
-        bool bFoundBump : 1;
+        bool bPhysics;
+        bool bRunGroundStuckFix;
+        bool bFoundBump;
     } flags;
 
     inline void Reset()

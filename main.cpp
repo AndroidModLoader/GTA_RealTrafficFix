@@ -5,15 +5,13 @@
 
 #ifdef AML32
     #include "GTASA_STRUCTS.h"
-    #define BYVER(__for32, __for64) (__for32)
 #else
     #include "GTASA_STRUCTS_210.h"
-    #define BYVER(__for32, __for64) (__for64)
 #endif
 
 #include "rtf_data.h"
 
-MYMODCFG(net.juniordjjr.rusjj.rtf, RealTrafficFix, 1.1, JuniorDjjr & RusJJ)
+MYMODCFG(net.juniordjjr.rusjj.rtf, RealTrafficFix, 1.2, JuniorDjjr & RusJJ)
 BEGIN_DEPLIST()
     ADD_DEPENDENCY_VER(net.rusjj.aml, 1.0.2.1)
 END_DEPLIST()
@@ -23,9 +21,9 @@ void* hGTASA;
 
 // GTA Vars
 #ifdef AML32
-CPool<CVehicle, CHeli> **ms_pVehiclePool;
+    CPool<CVehicle, CHeli> **ms_pVehiclePool;
 #else
-CPool<CVehicle, CPlane> **ms_pVehiclePool;
+    CPool<CVehicle, CPlane> **ms_pVehiclePool;
 #endif
 CPool<CObject, CCutsceneObject> **ms_pObjectPool;
 CCamera *TheCamera;
@@ -63,16 +61,6 @@ inline ExtendedVehicleData* GetExtData(CVehicle* veh)
         for(int i = 0; i < size; ++i) ms_pVehicleExtendedPool->m_byteMap[i].bEmpty = false;
     }
     return ms_pVehicleExtendedPool->GetAt((*ms_pVehiclePool)->GetIndex(veh));
-}
-inline void Clamp(int& val, int min, int max)
-{
-    if(val > max) val = max;
-    else if(val < min) val = min;
-}
-inline void Clamp(float& val, float min, float max)
-{
-    if(val > max) val = max;
-    else if(val < min) val = min;
 }
 inline int RandomInt(int min, int max)
 {
@@ -133,11 +121,10 @@ inline bool ThereIsObjectHere(CVector coord, float radius, int modelStart, int m
 }
 inline bool FixGroundStuck_IsValid(CVector coord, float maxZ)
 {
-    bool foundGround;
+    bool foundGround = false;
     coord.z += maxZ;
     float groundZ = FindGroundZFor3DCoord(coord.x, coord.y, coord.z, &foundGround, NULL);
-    if (foundGround) return true;
-    return false;
+    return foundGround;
 }
 inline bool FixGroundStuck(CVehicle *vehicle, CVector *modelMin, CVector *modelMax)
 {
@@ -227,7 +214,7 @@ inline void ProcessRTFVehicle(CVehicle* vehicle)
     // I can wait
     if(!(vehicle->m_AutoPilot.pTargetEntity == NULL && (!vehicle->vehicleFlags.bSirenOrAlarm || vehicle->m_nModelIndex == 423))) return;
 
-    float speed = vehicle->m_vecMoveSpeed.Magnitude() * 50.0f * 3.6f;
+    float speed = vehicle->m_vecMoveSpeed.Magnitude() * 180.0f;
     float distanceToCam = DistanceBetweenPoints(TheCamera->GetPosition(), vehicle->GetPosition());
 
     // Looks like it isn't stucked on the ground
@@ -326,7 +313,14 @@ inline void ProcessRTFVehicle(CVehicle* vehicle)
         offset = { modelMax.x + (speed / SidesSpeedOffsetDiv) + steerOffset, (modelMax.y + dist), (frontHeight / 1.5f) };
         coordB[2] = GetWorldCoordWithOffset(vehicle, offset);
         newZ = FindGroundZFor3DCoord(coordB[2].x, coordB[2].y, coordB[2].z + CheckGroundHeight, &foundGround, NULL);
-        if (fabsf((newZ - coordB[2].z)) > HeightDiffLimit) forceObstacle = true; else coordB[2].z = newZ + FinalGroundHeight;
+        if (fabsf((newZ - coordB[2].z)) > HeightDiffLimit)
+        {
+            forceObstacle = true;
+        }
+        else
+        {
+            coordB[2].z = newZ + FinalGroundHeight;
+        }
     }
 
     float obstacleDistFactor;
@@ -342,8 +336,14 @@ inline void ProcessRTFVehicle(CVehicle* vehicle)
 
     if (isBike)
     {
-        if (ProcessLineOfSight(coordA[0], coordB[0], outColPoint, outEntityC, 1, 1, 1, CheckObjects, 0, 0, 0, 0)) goto label_obstacle;
-        goto label_force_no_obstacle;
+        if (ProcessLineOfSight(coordA[0], coordB[0], outColPoint, outEntityC, 1, 1, 1, CheckObjects, 0, 0, 0, 0))
+        {
+            goto label_obstacle;
+        }
+        else
+        {
+            goto label_force_no_obstacle;
+        }
     }
 
     if (ProcessLineOfSight(coordA[0], coordB[0], outColPoint, outEntityC, 1, 1, 1, CheckObjects, 0, 0, 0, 0) ||
@@ -364,9 +364,10 @@ inline void ProcessRTFVehicle(CVehicle* vehicle)
     else
     {
       label_force_no_obstacle:
-        if(0)
+        if (false)
         {
             // Bumps part here?
+            // UPD: Speed bumps mod
         }
         else
         {
@@ -385,6 +386,7 @@ inline void ProcessRTFVehicle(CVehicle* vehicle)
         }
     }
 
+    // Set final cruise speed
     if (subClass == VEHICLE_TYPE_BMX)
     {
         fNewCruiseSpeed *= BicycleSpeedMult;
@@ -507,7 +509,7 @@ extern "C" void OnModLoad()
     hGTASA = aml->GetLibHandle("libGTASA.so");
     
     HornsThreshold = cfg->GetInt("HornsThreshold", 2000, "Settings");
-    Clamp(HornsThreshold, 0, 2000);
+    clampint(0, 2000, &HornsThreshold);
 
     CruiseSpeed = cfg->GetFloat("CruiseSpeed", 15.0f, "Settings");
     CruiseMinSpeed = cfg->GetFloat("CruiseMinSpeed", 3.0f, "Settings");
@@ -547,15 +549,15 @@ extern "C" void OnModLoad()
 
     HOOK(AutomobileHorn, aml->GetSym(hGTASA, "_ZN11CAutomobile11PlayCarHornEv"));
     HOOK(BikeHorn, aml->GetSym(hGTASA, "_ZN5CBike11PlayCarHornEv"));
-    HOOKPLT(VehicleRender, pGTASA + BYVER(0x66E26C, 0x83D318)); // vtable
-    HOOKPLT(VehicleRender, pGTASA + BYVER(0x66F3B4, 0x83F048));
+    HOOKPLT(VehicleRender, pGTASA + BYBIT(0x66E26C, 0x83D318)); // vtable
+    HOOKPLT(VehicleRender, pGTASA + BYBIT(0x66F3B4, 0x83F048));
     HOOK(VehicleDestroy, aml->GetSym(hGTASA, "_ZN8CVehicleD2Ev"));
 
     // CCarCtrl::PickNextNodeRandomly
-    if(cfg->GetBool("AvoidVehiclesChangingLane", true, "Settings")) aml->Redirect(pGTASA + BYVER(0x2EB0F8 + 0x1, 0x3AED1C), (uintptr_t)VehicleChangesLane);
-    VehicleChangesLane_BackTo = pGTASA + BYVER(0x2EB114 + 0x1, 0x3AED38);
+    if(cfg->GetBool("AvoidVehiclesChangingLane", true, "Settings")) aml->Redirect(pGTASA + BYBIT(0x2EB0F8 + 0x1, 0x3AED1C), (uintptr_t)VehicleChangesLane);
+    VehicleChangesLane_BackTo = pGTASA + BYBIT(0x2EB114 + 0x1, 0x3AED38);
 
     // CCarCtrl::GenerateOneRandomCar
-    if(cfg->GetBool("SlowVehiclesSlowLane", true, "Settings")) aml->Redirect(pGTASA + BYVER(0x2E8CCC + 0x1, 0x3AC658), (uintptr_t)SetNewCarLane);
-    SetNewCarLane_BackTo = pGTASA + BYVER(0x2E8CDE + 0x1, 0x3AC66C);
+    if(cfg->GetBool("SlowVehiclesSlowLane", true, "Settings")) aml->Redirect(pGTASA + BYBIT(0x2E8CCC + 0x1, 0x3AC658), (uintptr_t)SetNewCarLane);
+    SetNewCarLane_BackTo = pGTASA + BYBIT(0x2E8CDE + 0x1, 0x3AC66C);
 }
